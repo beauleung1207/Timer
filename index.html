@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Show Time Timer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..900&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: projection board — header strip, centered stage (who/what above, giant clock center, instructions below), 11:15–12:15 timeline rail, host control bar */
+:root {
+  --bg: #0A1624;          /* deep blueboard */
+  --surface: #12233A;
+  --surface-2: #1A3050;
+  --line: #2A4468;
+  --fg: #F4F7FB;
+  --muted: #A3B6CE;
+  --accent: #6CC4FF;
+  --c-intro: #6CC4FF;
+  --c-video: #B99CFF;
+  --c-qa: #40D9C3;
+  --c-vote: #FF86BE;
+  --c-wrap: #B5E36B;
+  --warn: #FFCB3D;
+  --crit: #FF4B4B;
+  --on-accent: #06121F;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+:root[data-look="light"] {
+  --bg: #F3F6FA;
+  --surface: #FFFFFF;
+  --surface-2: #E4EBF4;
+  --line: #C3D0E0;
+  --fg: #08131F;
+  --muted: #4A5D75;
+  --accent: #0A6FC2;
+  --c-intro: #0A6FC2;
+  --c-video: #6A3FD6;
+  --c-qa: #00877A;
+  --c-vote: #C2286E;
+  --c-wrap: #4E7E0E;
+  --warn: #B07A00;
+  --crit: #D81E1E;
+  --on-accent: #FFFFFF;
+  color-scheme: light;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; overflow-x: hidden; }
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: clamp(10px, 1.6vh, 22px);
+  padding-block: clamp(12px, 2vh, 28px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  position: relative;
+}
+.app::after { content: ""; position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 0 transparent; transition: box-shadow .3s; z-index: 5; }
+.app.is-warn::after { box-shadow: inset 0 0 0 6px var(--warn); }
+.app.is-crit::after { box-shadow: inset 0 0 0 10px var(--crit); }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px 32px; border-bottom: 2px solid var(--line); padding-bottom: clamp(8px, 1.2vh, 16px); }
+.eyebrow { font-size: clamp(12px, 1.05vw, 20px); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.session { font-family: var(--display); font-weight: 800; font-stretch: 90%; font-size: clamp(22px, 2.5vw, 48px); line-height: 1.1; text-wrap: balance; }
+.session .slot { font-weight: 600; color: var(--accent); margin-left: .35em; font-variant-numeric: tabular-nums; }
+.meta { display: flex; gap: clamp(16px, 2.5vw, 48px); align-items: flex-end; flex-wrap: wrap; }
+.lbl { display: block; font-size: clamp(11px, .85vw, 16px); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+.hostval { display: inline-block; min-width: 10em; min-height: 1.3em; border-bottom: 2px solid var(--line); font-size: clamp(18px, 1.7vw, 32px); font-weight: 600; }
+.hostval:not(:empty) { border-bottom-color: transparent; }
+.clock { font-family: var(--display); font-weight: 700; font-size: clamp(22px, 2.3vw, 44px); font-variant-numeric: tabular-nums; line-height: 1; }
+
+/* Stage */
+.stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(6px, 1.2vh, 18px); min-height: 0; position: relative; text-align: center; }
+.top-band { display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 1vh, 12px); max-width: 100%; }
+.presenter-row { display: flex; align-items: center; justify-content: center; gap: 10px clamp(14px, 2vw, 36px); flex-wrap: wrap; }
+.below { width: 100%; max-width: 1400px; display: flex; flex-direction: column; align-items: center; gap: clamp(8px, 1.4vh, 16px); min-width: 0; }
+.foot-row { display: flex; gap: 6px 36px; justify-content: center; align-items: baseline; flex-wrap: wrap; }
+.section-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; }
+.chip { display: inline-flex; align-items: center; gap: .5em; padding: .3em .8em; border-radius: 999px; font-weight: 700; font-size: clamp(13px, 1.15vw, 22px); letter-spacing: .04em; text-transform: uppercase; background: var(--kind, var(--accent)); color: var(--on-accent); }
+.status { font-size: clamp(13px, 1.05vw, 20px); font-weight: 600; color: var(--muted); padding: .25em .7em; border: 2px solid var(--line); border-radius: 999px; }
+.status.running { color: var(--c-qa); border-color: currentColor; }
+.status.paused { color: var(--warn); border-color: currentColor; }
+.presenter { font-family: var(--display); font-weight: 800; font-stretch: 85%; font-size: clamp(40px, min(5.4vw, 9vh), 116px); line-height: .95; letter-spacing: -.01em; white-space: nowrap; }
+.presenter b { color: var(--kind, var(--accent)); font-variant-numeric: tabular-nums; }
+.presenter .of { color: var(--muted); font-weight: 600; }
+.dots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.dot { width: clamp(26px, 2.8vw, 52px); height: clamp(26px, 2.8vw, 52px); border-radius: 50%; display: grid; place-items: center; font-size: clamp(12px, 1.2vw, 22px); font-weight: 700; border: 2px solid var(--line); color: var(--muted); font-variant-numeric: tabular-nums; }
+.dot.past { background: var(--surface-2); color: var(--muted); border-color: var(--surface-2); }
+.dot.now { background: var(--kind, var(--accent)); border-color: var(--kind, var(--accent)); color: var(--on-accent); }
+.phase { margin: 0; font-family: var(--display); font-weight: 800; font-stretch: 95%; font-size: clamp(26px, 3.1vw, 62px); line-height: 1.08; text-wrap: balance; color: var(--kind, var(--fg)); }
+.timerbox .phase { text-align: center; max-width: 100%; font-size: clamp(22px, min(2.4vw, 4.6vh), 50px); }
+.subs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.sub { display: flex; align-items: baseline; gap: .5em; padding: .35em .75em; border-radius: 10px; border: 2px solid var(--line); color: var(--muted); font-weight: 600; font-size: clamp(13px, 1.1vw, 21px); }
+.sub .d { font-variant-numeric: tabular-nums; font-weight: 500; opacity: .85; }
+.sub.past { background: var(--surface); border-color: var(--surface); text-decoration: line-through; text-decoration-thickness: 2px; }
+.sub.now { border-color: var(--k); color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); }
+.instr { margin: 0; width: 100%; max-width: 1300px; font-size: clamp(15px, 1.35vw, 26px); line-height: 1.4; font-weight: 500; text-wrap: pretty; text-align: left; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px clamp(12px, 2vw, 28px); }
+.instr .ln { display: block; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 12px; padding: .55em 1em; }
+.instr.single { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.instr.single .ln { background: none; border: 0; padding: 0; text-align: center; max-width: 58ch; }
+.instr .role { display: block; font-size: .72em; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--kind, var(--accent)); }
+.hint { margin: 0; color: var(--muted); font-size: clamp(13px, 1.05vw, 20px); }
+
+.timerbox { display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 1.2vh, 16px); min-width: 0; }
+.timer { font-family: var(--display); font-weight: 800; font-stretch: 80%; font-variant-numeric: tabular-nums; font-size: clamp(88px, min(16vw, 22vh), 380px); line-height: .86; letter-spacing: -.02em; transition: color .25s; }
+.timerbox.warn .timer { color: var(--warn); }
+.timerbox.crit .timer { color: var(--crit); }
+.timerbox.crit.blink .timer { animation: blink 1s steps(2, jump-none) infinite; }
+@keyframes blink { 0% { opacity: 1; } 100% { opacity: .2; } }
+.stepbar { width: min(900px, 70vw); height: clamp(8px, 1.1vh, 14px); background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.stepbar div { height: 100%; width: 0; background: var(--kind, var(--accent)); border-radius: 99px; }
+.timerbox.warn .stepbar div { background: var(--warn); }
+.timerbox.crit .stepbar div { background: var(--crit); }
+.next { display: flex; gap: .6em; align-items: baseline; justify-content: center; flex-wrap: wrap; font-size: clamp(15px, 1.4vw, 26px); color: var(--muted); text-align: center; }
+.next .k { text-transform: uppercase; letter-spacing: .1em; font-size: .7em; font-weight: 700; }
+.next strong { color: var(--fg); font-weight: 600; }
+
+.done { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: var(--bg); z-index: 2; padding: 16px; }
+.done h2 { margin: 0 0 .3em; font-family: var(--display); font-weight: 800; font-stretch: 90%; font-size: clamp(36px, 5.4vw, 108px); line-height: 1.05; text-wrap: balance; color: var(--c-wrap); }
+.done p { margin: 0; font-size: clamp(20px, 2.6vw, 52px); font-weight: 600; text-wrap: balance; }
+.done p + p { margin-top: .4em; color: var(--muted); font-size: clamp(16px, 1.6vw, 30px); font-weight: 500; }
+
+/* Timeline */
+.timeline { display: flex; flex-direction: column; gap: 6px; }
+.tl-head { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; font-size: clamp(13px, 1.05vw, 20px); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-head strong { color: var(--fg); font-weight: 600; }
+.warnchip { color: var(--warn); font-weight: 700; border: 2px solid currentColor; border-radius: 999px; padding: .1em .7em; }
+.tl-groups, .tl-ticks { position: relative; height: 1.5em; font-size: clamp(12px, .95vw, 18px); }
+.tl-group { position: absolute; top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--muted); border-left: 2px solid var(--line); padding-left: 6px; }
+.tl-group.cur { color: var(--fg); }
+.tl-track { position: relative; height: clamp(22px, 3.4vh, 40px); border-radius: 8px; background: var(--surface); }
+.tl-seg { position: absolute; top: 0; bottom: 0; background: var(--k); opacity: .28; border-right: 2px solid var(--bg); overflow: hidden; }
+.tl-seg.pb { border-right-width: 5px; }
+.tl-seg.past { opacity: .95; }
+.tl-seg.cur { opacity: .45; }
+.tl-seg .f { position: absolute; inset: 0 auto 0 0; background: var(--k); width: 0; }
+.tl-seg:first-child { border-radius: 8px 0 0 8px; }
+.tl-seg:last-child { border-radius: 0 8px 8px 0; border-right: 0; }
+.tl-pos { position: absolute; top: -7px; bottom: -7px; width: 4px; margin-left: -2px; background: var(--fg); border-radius: 2px; }
+.tl-now { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 3px dashed var(--warn); }
+.tl-now span { position: absolute; bottom: 100%; left: 4px; font-size: 11px; font-weight: 700; color: var(--warn); text-transform: uppercase; letter-spacing: .08em; }
+.tl-tick { position: absolute; top: 0; transform: translateX(-50%); color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.tl-tick.first { transform: none; }
+.tl-tick.last { transform: translateX(-100%); }
+.tl-tick.slot { color: var(--fg); }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; border-top: 2px solid var(--line); padding-top: clamp(8px, 1.2vh, 14px); }
+.grp { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.sep { width: 2px; align-self: stretch; background: var(--line); margin: 0 4px; }
+.btn { appearance: none; border: 2px solid var(--line); background: var(--surface); color: var(--fg); padding: .45em .85em; border-radius: 10px; font-weight: 600; font-size: clamp(13px, .95vw, 17px); cursor: pointer; display: inline-flex; align-items: center; gap: .45em; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn kbd { font: 600 .78em var(--body); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 .35em; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); min-width: 8.5em; justify-content: center; }
+.btn.primary kbd { color: inherit; border-color: currentColor; opacity: .7; }
+.btn.sound { background: var(--warn); border-color: var(--warn); color: #1A1200; animation: pulse 1.6s ease-in-out infinite; }
+.btn.danger.armed { background: var(--crit); border-color: var(--crit); color: #fff; }
+.btn[aria-pressed="true"] { color: var(--warn); border-color: var(--warn); }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--warn) 35%, transparent); } }
+.spacer { flex: 1; }
+.app.noctl .controls { display: none; }
+.showctl { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: max(12px, env(safe-area-inset-bottom, 0px)); opacity: .35; z-index: 6; }
+.showctl:hover, .showctl:focus-visible { opacity: 1; }
+
+/* Settings drawer */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100%); background: var(--surface); border-left: 2px solid var(--line); z-index: 20; overflow-y: auto; padding-block: max(18px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-bottom, 0px)); padding-left: 20px; padding-right: max(20px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; box-shadow: -20px 0 60px rgba(0,0,0,.35); }
+.drawer h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 26px; }
+.drawer h3 { margin: 4px 0 0; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.d-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 14px; font-weight: 600; }
+.field input, .field select, .field textarea { background: var(--bg); border: 2px solid var(--line); border-radius: 8px; padding: .45em .6em; width: 100%; }
+.field textarea { min-height: 4.6em; resize: vertical; line-height: 1.4; }
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sum { border-radius: 10px; padding: 12px 14px; background: var(--bg); border: 2px solid var(--line); font-size: 15px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.sum.over { border-color: var(--warn); }
+.sum .w { color: var(--warn); font-weight: 700; }
+.small { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+@media (max-width: 900px) {
+  .timer { font-size: clamp(88px, 28vw, 240px); }
+  .stepbar { width: 100%; }
+  .sep { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timerbox.crit.blink .timer { animation: none; }
+  .btn.sound { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Spring 2027 ELTA Training Workshop · Teaching Demo</div>
+      <div class="session">Session 2: Show Time<span class="slot" id="slotLabel">11:15–12:15</span></div>
+    </div>
+    <div class="meta">
+      <div><span class="lbl">Host</span><span class="hostval" id="hostName"></span></div>
+      <div><span class="lbl">Current time</span><span class="clock" id="clock">--:--:--</span></div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <section class="top-band">
+      <div class="section-row"><span class="chip" id="sectionChip">Teaching Demo Rounds</span><span class="status" id="statusChip">Ready</span></div>
+      <div class="presenter-row">
+        <div class="presenter" id="presenterLine">Presenter <b id="pNum">1</b> <span class="of">of</span> <b id="pTotal">7</b></div>
+        <div class="dots" id="dots" aria-label="Presenters"></div>
+      </div>
+    </section>
+    <section class="timerbox" id="timerbox" aria-live="off">
+      <h1 class="phase" id="phaseTitle">Introduce Your Teaching Design</h1>
+      <div class="timer" id="timer">02:00</div>
+      <div class="stepbar"><div id="stepFill"></div></div>
+    </section>
+    <section class="below">
+      <div class="subs" id="subs"></div>
+      <div class="instr" id="instr"></div>
+      <div class="foot-row"><p class="hint" id="hint"></p><div class="next" id="next"></div></div>
+    </section>
+    <div class="done" id="done" hidden>
+      <div>
+        <h2>Session 2 Complete — Enjoy your lunch!</h2>
+        <p>Session 3 starts at 13:15.</p>
+        <p>Session 3: What Counts as Good Teaching?</p>
+      </div>
+    </div>
+  </main>
+
+  <section class="timeline" aria-label="Session timeline">
+    <div class="tl-head"><span id="tlElapsed"></span><span id="tlSched"></span><span class="warnchip" id="tlWarn" hidden></span></div>
+    <div class="tl-groups" id="tlGroups"></div>
+    <div class="tl-track" id="tlTrack"><div id="tlSegs"></div><div class="tl-now" id="tlNow" hidden><span>Now</span></div><div class="tl-pos" id="tlPos"></div></div>
+    <div class="tl-ticks" id="tlTicks"></div>
+  </section>
+
+  <footer class="controls" id="controls">
+    <div class="grp">
+      <button class="btn sound" id="bSound" type="button">Click to Enable Sound</button>
+      <button class="btn" id="bTest" type="button" hidden>Test Sound</button>
+      <button class="btn" id="bMute" type="button" aria-pressed="false" hidden>Sound On <kbd>M</kbd></button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="btn" id="bPrev" type="button"><kbd>←</kbd> Previous</button>
+      <button class="btn primary" id="bStart" type="button">Start <kbd>Space</kbd></button>
+      <button class="btn" id="bNext" type="button">Next <kbd>→</kbd></button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="btn" id="bMinus" type="button">−1 min <kbd>−</kbd></button>
+      <button class="btn" id="bPlus" type="button">+1 min <kbd>+</kbd></button>
+    </div>
+    <span class="sep"></span>
+    <button class="btn danger" id="bReset" type="button">Reset</button>
+    <span class="spacer"></span>
+    <div class="grp">
+      <button class="btn" id="bFull" type="button">Full Screen <kbd>F</kbd></button>
+      <button class="btn" id="bSettings" type="button">Settings <kbd>S</kbd></button>
+      <button class="btn" id="bHide" type="button">Hide Controls <kbd>H</kbd></button>
+    </div>
+  </footer>
+  <button class="btn showctl" id="bShow" type="button" hidden>Show Controls <kbd>H</kbd></button>
+
+  <aside class="drawer" id="drawer" hidden aria-label="Settings">
+    <div class="d-head"><h2>Settings</h2><button class="btn" id="bClose" type="button">Close <kbd>Esc</kbd></button></div>
+    <div class="sum" id="sumBox"></div>
+    <div class="field"><label for="fHost">Host name</label><input id="fHost" type="text" placeholder="Shown in the header (leave blank to keep empty)"></div>
+    <div class="row2">
+      <div class="field"><label for="fGroup">ELTAs per group</label><input id="fGroup" type="number" min="1" max="15" step="1"></div>
+      <div class="field"><label for="fStart">Session start</label><input id="fStart" type="time"></div>
+    </div>
+    <h3>Each presenter (minutes)</h3>
+    <div class="row3">
+      <div class="field"><label for="fIntro">Introduce</label><input id="fIntro" type="number" min="0.5" max="30" step="0.5"></div>
+      <div class="field"><label for="fVideo">Video</label><input id="fVideo" type="number" min="0.5" max="30" step="0.5"></div>
+      <div class="field"><label for="fQa">Q&amp;A</label><input id="fQa" type="number" min="0.5" max="30" step="0.5"></div>
+    </div>
+    <h3>Closing stages (minutes)</h3>
+    <div class="row2">
+      <div class="field"><label for="fVote">Group Vote</label><input id="fVote" type="number" min="0.5" max="30" step="0.5"></div>
+      <div class="field"><label for="fWrap">Wrap-Up</label><input id="fWrap" type="number" min="0.5" max="30" step="0.5"></div>
+    </div>
+    <h3>Participant instructions</h3>
+    <div class="field"><label for="tIntro">Introduce Your Teaching Design</label><textarea id="tIntro"></textarea></div>
+    <div class="field"><label for="tVideo">Show Your Demo Video</label><textarea id="tVideo"></textarea></div>
+    <div class="field"><label for="tQa">Group Q&amp;A</label><textarea id="tQa"></textarea></div>
+    <div class="field"><label for="tVote">Group Vote</label><textarea id="tVote"></textarea></div>
+    <div class="field"><label for="tWrap">Wrap-Up</label><textarea id="tWrap"></textarea></div>
+    <h3>Display</h3>
+    <div class="field"><label for="fLook">Color scheme</label><select id="fLook"><option value="dark">Dark (best for most projectors)</option><option value="light">Light (bright rooms)</option></select></div>
+    <div class="grp"><button class="btn" id="bDefaults" type="button">Restore Default Settings</button></div>
+    <p class="small">Changes apply immediately and are saved in this browser. Shortcuts: Space start/pause · ← → previous/next stage · + / − add or remove 1 minute · M mute · F full screen · H hide controls · S settings.</p>
+  </aside>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE = "elta-showtime-2027-v1";
+
+  var DEF = {
+    host: "", groupSize: 7, start: "11:15",
+    intro: 2, video: 3, qa: 2, vote: 5, wrap: 6, look: "dark",
+    text: {
+      intro: "Presenter: briefly explain your topic, grade level, and teaching design. Group: listen for the target language and the activity.",
+      video: "Play the presenter’s video on your group’s Padlet. Watch for clear instructions, ICQs, and student engagement.",
+      qa: "Ask the presenter one question or share one strength you noticed. Keep it short so everyone gets a turn.",
+      vote: "Vote for the best teaching demonstration in your group. Choose one demo and be ready to say why.",
+      wrap: "Share your group’s winning demo and one key takeaway. Lunch starts at 12:15."
+    }
+  };
+  var KIND = {
+    intro: { section: "Teaching Demo Rounds", title: "Introduce Your Teaching Design", short: "Introduce" },
+    video: { section: "Teaching Demo Rounds", title: "Show Your Demo Video", short: "Demo Video" },
+    qa:    { section: "Teaching Demo Rounds", title: "Group Q&A", short: "Q&A" },
+    vote:  { section: "Group Vote", title: "Vote for Your Group’s Best Demo", short: "Group Vote" },
+    wrap:  { section: "Wrap-Up", title: "Wrap-Up & Lunch Reminder", short: "Wrap-Up" }
+  };
+  var SLOT_MIN = 60;
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function load() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) {}
+    var cfg = clone(DEF), st = null;
+    if (saved && saved.cfg) {
+      Object.keys(DEF).forEach(function (k) { if (k !== "text" && saved.cfg[k] !== undefined) cfg[k] = saved.cfg[k]; });
+      if (saved.cfg.text) Object.keys(DEF.text).forEach(function (k) { if (typeof saved.cfg.text[k] === "string") cfg.text[k] = saved.cfg.text[k]; });
+      st = saved.st || null;
+    }
+    return { cfg: cfg, st: st };
+  }
+  var loaded = load();
+  var cfg = loaded.cfg;
+  var steps = [];
+  var S = { idx: 0, status: "idle", endAt: 0, remaining: 0, adj: {} };
+
+  function save() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({ cfg: cfg, st: { key: steps[S.idx] && steps[S.idx].key, status: S.status, endAt: S.endAt, remaining: S.remaining, adj: S.adj } }));
+    } catch (e) {}
+  }
+
+  function build() {
+    steps = [];
+    for (var p = 1; p <= cfg.groupSize; p++) {
+      ["intro", "video", "qa"].forEach(function (k) { steps.push({ kind: k, p: p, key: k + "-" + p }); });
+    }
+    steps.push({ kind: "vote", p: 0, key: "vote" });
+    steps.push({ kind: "wrap", p: 0, key: "wrap" });
+  }
+  function dur(i) { var s = steps[i]; return Math.max(5000, cfg[s.kind] * 60000 + (S.adj[s.key] || 0)); }
+  function total() { var t = 0; for (var i = 0; i < steps.length; i++) t += dur(i); return t; }
+  function before(i) { var t = 0; for (var j = 0; j < i; j++) t += dur(j); return t; }
+  function startMs() { var m = /^(\d{1,2}):(\d{2})/.exec(cfg.start) || [0, 11, 15]; return (+m[1] * 60 + +m[2]) * 60000; }
+  function remaining(now) {
+    if (S.status === "running") return Math.max(0, S.endAt - now);
+    if (S.status === "done") return 0;
+    return S.remaining;
+  }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function mmss(ms) { var s = Math.ceil(Math.max(0, ms) / 1000); return pad(Math.floor(s / 60)) + ":" + pad(s % 60); }
+  function hhmm(msDay) { var m = Math.round(msDay / 60000); m = ((m % 1440) + 1440) % 1440; return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
+  function msOfDay(d) { return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds(); }
+  function minsLabel(ms) { var m = ms / 60000; return (Math.round(m * 10) / 10) + " min"; }
+
+  /* ---------- Sound (Web Audio API) ---------- */
+  var ctx = null, muted = false;
+  function ensureAudio() {
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+    } catch (e) { ctx = null; }
+    renderSound();
+    return !!ctx;
+  }
+  function tone(freq, len, type, vol, delay) {
+    if (!ctx || muted) return;
+    var t = ctx.currentTime + (delay || 0);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || "sine"; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.setValueAtTime(vol, t + Math.max(0.02, len - 0.08));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + len + 0.03);
+  }
+  function shortBeep() { tone(1046, 0.13, "square", 0.12); }
+  function longTone() { tone(587, 0.95, "triangle", 0.5); tone(880, 0.95, "sine", 0.22); }
+  function endChime() { tone(523, 0.45, "triangle", 0.45); tone(659, 0.45, "triangle", 0.45, 0.32); tone(784, 1.1, "triangle", 0.5, 0.64); }
+  function renderSound() {
+    var on = !!ctx;
+    $("bSound").hidden = on; $("bTest").hidden = !on; $("bMute").hidden = !on;
+    $("bMute").setAttribute("aria-pressed", muted ? "true" : "false");
+    $("bMute").innerHTML = (muted ? "Muted" : "Sound On") + " <kbd>M</kbd>";
+  }
+  function toggleMute() { if (!ctx) { ensureAudio(); return; } muted = !muted; renderSound(); }
+
+  /* ---------- Timer state ---------- */
+  var lastBeep = "";
+  function setStatus(s) { S.status = s; }
+  function startPause() {
+    ensureAudio();
+    var now = Date.now();
+    if (S.status === "idle" || S.status === "paused") { S.endAt = now + S.remaining; setStatus("running"); wake(); }
+    else if (S.status === "running") { S.remaining = Math.max(0, S.endAt - now); setStatus("paused"); }
+    else if (S.status === "done") { return; }
+    save(); render(true);
+  }
+  function goTo(i) {
+    var now = Date.now();
+    if (i < 0) i = 0;
+    if (i >= steps.length) { setStatus("done"); S.idx = steps.length - 1; S.remaining = 0; endChime(); save(); render(true); return; }
+    var wasRunning = S.status === "running";
+    S.idx = i; S.remaining = dur(i); lastBeep = "";
+    if (S.status === "done") setStatus("paused");
+    if (wasRunning) S.endAt = now + S.remaining;
+    save(); render(true);
+  }
+  function adjust(delta) {
+    if (S.status === "done") return;
+    var now = Date.now(), rem = remaining(now);
+    if (delta < 0) { var room = rem - 5000; if (room <= 0) return; delta = Math.max(delta, -room); }
+    var k = steps[S.idx].key;
+    S.adj[k] = (S.adj[k] || 0) + delta;
+    if (S.status === "running") S.endAt += delta; else S.remaining += delta;
+    lastBeep = "";
+    save(); render(true);
+  }
+  var resetArmed = 0;
+  function reset() {
+    var b = $("bReset");
+    if (!resetArmed) {
+      b.classList.add("armed"); b.textContent = "Click again to reset";
+      resetArmed = setTimeout(disarm, 3000);
+      return;
+    }
+    disarm();
+    S.adj = {}; S.idx = 0; setStatus("idle"); S.remaining = dur(0); S.endAt = 0; lastBeep = "";
+    save(); render(true);
+  }
+  function disarm() { clearTimeout(resetArmed); resetArmed = 0; var b = $("bReset"); b.classList.remove("armed"); b.textContent = "Reset"; }
+
+  var lock = null;
+  function wake() { try { if (navigator.wakeLock && !lock) navigator.wakeLock.request("screen").then(function (l) { lock = l; l.addEventListener("release", function () { lock = null; }); }).catch(function () {}); } catch (e) {} }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && S.status === "running") wake(); tick(); });
+
+  function tick() {
+    var now = Date.now(), advanced = false;
+    while (S.status === "running" && S.endAt <= now) {
+      if (S.idx >= steps.length - 1) { setStatus("done"); S.remaining = 0; endChime(); advanced = false; save(); break; }
+      S.idx++; S.endAt += dur(S.idx); advanced = true;
+    }
+    if (advanced) { longTone(); lastBeep = ""; save(); }
+    if (S.status === "running") {
+      var rem = S.endAt - now, sec = Math.ceil(rem / 1000);
+      if (sec >= 1 && sec <= 5 && (sec * 1000 - rem) < 700) {
+        var tag = S.idx + ":" + sec;
+        if (tag !== lastBeep) { lastBeep = tag; shortBeep(); }
+      }
+    }
+    render(false);
+  }
+
+  /* ---------- Rendering ---------- */
+  var structSig = "";
+  function kindVar(k) { return "var(--c-" + k + ")"; }
+
+  function buildTimeline() {
+    var tot = total(), span = Math.max(SLOT_MIN * 60000, tot), st = startMs();
+    var segs = $("tlSegs"); segs.innerHTML = "";
+    var acc = 0;
+    steps.forEach(function (s, i) {
+      var d = dur(i), el = document.createElement("div");
+      el.className = "tl-seg" + (s.kind === "qa" ? " pb" : "");
+      el.style.left = (acc / span * 100) + "%";
+      el.style.width = (d / span * 100) + "%";
+      el.style.setProperty("--k", kindVar(s.kind));
+      el.title = (s.p ? "Presenter " + s.p + " · " : "") + KIND[s.kind].title + " · " + hhmm(st + acc);
+      el.innerHTML = '<div class="f"></div>';
+      segs.appendChild(el);
+      acc += d;
+    });
+    // group labels
+    var g = $("tlGroups"); g.innerHTML = "";
+    var rEnd = before(steps.length - 2), vEnd = before(steps.length - 1);
+    [["rounds", 0, rEnd, "Demo Rounds"], ["vote", rEnd, vEnd, "Vote"], ["wrap", vEnd, tot, "Wrap-Up"]].forEach(function (x) {
+      var el = document.createElement("div");
+      el.className = "tl-group"; el.dataset.g = x[0];
+      el.style.left = (x[1] / span * 100) + "%"; el.style.width = ((x[2] - x[1]) / span * 100) + "%";
+      el.textContent = x[0] === "rounds" ? x[3] + " " + hhmm(st + x[1]) + "–" + hhmm(st + x[2]) : x[3] + " " + hhmm(st + x[1]);
+      g.appendChild(el);
+    });
+    // ticks every 15 minutes, plus slot end
+    var t = $("tlTicks"); t.innerHTML = "";
+    var marks = [];
+    for (var m = 0; m <= span / 60000 + 0.01; m += 15) marks.push(m * 60000);
+    if (marks[marks.length - 1] < span - 1) marks.push(span);
+    marks.forEach(function (ms, i) {
+      var el = document.createElement("div");
+      el.className = "tl-tick" + (i === 0 ? " first" : "") + (i === marks.length - 1 ? " last" : "") + (Math.abs(ms - SLOT_MIN * 60000) < 1 ? " slot" : "");
+      el.style.left = (ms / span * 100) + "%";
+      el.textContent = hhmm(st + ms);
+      t.appendChild(el);
+    });
+    $("slotLabel").textContent = hhmm(st) + "–" + hhmm(st + SLOT_MIN * 60000);
+  }
+
+  function renderInstr(text) {
+    var box = $("instr"); box.innerHTML = ""; var count = 0;
+    text.split(/\n+|\s+(?=(?:Presenter|Presenters|Group|Groups|Everyone|Audience|Host|Listeners)\s*:)/).forEach(function (part) {
+      part = part.trim(); if (!part) return;
+      var ln = document.createElement("span"); ln.className = "ln";
+      var m = /^([A-Za-z][A-Za-z ]{0,20}):\s*(.*)$/.exec(part);
+      if (m) {
+        var r = document.createElement("span"); r.className = "role"; r.textContent = m[1];
+        ln.appendChild(r); ln.appendChild(document.createTextNode(m[2]));
+      } else ln.textContent = part;
+      box.appendChild(ln); count++;
+    });
+    box.classList.toggle("single", count < 2);
+  }
+
+  function renderStructure() {
+    var s = steps[S.idx], app = $("app");
+    var color = kindVar(s.kind);
+    $("stage").style.setProperty("--kind", color);
+    $("sectionChip").textContent = KIND[s.kind].section;
+    $("phaseTitle").textContent = KIND[s.kind].title;
+    renderInstr(cfg.text[s.kind] || "");
+    var isRound = s.p > 0;
+    $("presenterLine").hidden = !isRound;
+    $("dots").hidden = !isRound;
+    $("pNum").textContent = s.p; $("pTotal").textContent = cfg.groupSize;
+    $("hint").textContent = isRound ? "Present in the order of the posts on your group’s Padlet." : (s.kind === "vote" ? "Every ELTA votes. Do not vote for yourself." : "Lunch Break 12:15–13:15 · Session 3 starts at 13:15.");
+    // dots
+    var d = $("dots"); d.innerHTML = "";
+    if (isRound) for (var p = 1; p <= cfg.groupSize; p++) {
+      var el = document.createElement("span");
+      el.className = "dot" + (p < s.p ? " past" : p === s.p ? " now" : "");
+      el.textContent = p; d.appendChild(el);
+    }
+    // sub-stage pills
+    var subs = $("subs"); subs.innerHTML = "";
+    var list = isRound
+      ? ["intro", "video", "qa"].map(function (k) { return { k: k, label: KIND[k].short, ms: cfg[k] * 60000 + (S.adj[k + "-" + s.p] || 0), state: k === s.kind ? "now" : (["intro", "video", "qa"].indexOf(k) < ["intro", "video", "qa"].indexOf(s.kind) ? "past" : "") }; })
+      : [{ k: "intro", label: "Demo Rounds", ms: before(steps.length - 2), state: "past" },
+         { k: "vote", label: "Group Vote", ms: dur(steps.length - 2), state: s.kind === "vote" ? "now" : "past" },
+         { k: "wrap", label: "Wrap-Up", ms: dur(steps.length - 1), state: s.kind === "wrap" ? "now" : "" }];
+    list.forEach(function (x) {
+      var el = document.createElement("span");
+      el.className = "sub " + x.state;
+      el.style.setProperty("--k", kindVar(x.k));
+      el.innerHTML = '<span></span><span class="d"></span>';
+      el.firstChild.textContent = x.label;
+      el.lastChild.textContent = minsLabel(Math.max(5000, x.ms));
+      subs.appendChild(el);
+    });
+    // next
+    var n = $("next");
+    if (S.idx < steps.length - 1) {
+      var ns = steps[S.idx + 1];
+      n.innerHTML = '<span class="k">Up next</span><strong></strong><span></span>';
+      n.children[1].textContent = KIND[ns.kind].title + (ns.p ? " — Presenter " + ns.p : "");
+      n.children[2].textContent = "· " + minsLabel(dur(S.idx + 1));
+    } else {
+      n.innerHTML = '<span class="k">Up next</span><strong>Lunch Break</strong><span>· Session 3 at 13:15</span>';
+    }
+    // status
+    var sc = $("statusChip");
+    sc.className = "status " + S.status;
+    sc.textContent = { idle: "Ready — waiting to start", running: "In progress", paused: "Paused", done: "Complete" }[S.status];
+    var b = $("bStart");
+    b.innerHTML = ({ idle: "Start", running: "Pause", paused: "Resume", done: "Finished" })[S.status] + " <kbd>Space</kbd>";
+    b.disabled = S.status === "done";
+    $("done").hidden = S.status !== "done";
+    $("hostName").textContent = cfg.host.trim();
+    // timeline segment states
+    var segEls = $("tlSegs").children;
+    for (var i = 0; i < segEls.length; i++) {
+      segEls[i].classList.toggle("past", i < S.idx || S.status === "done");
+      segEls[i].classList.toggle("cur", i === S.idx && S.status !== "done");
+      if (i !== S.idx) segEls[i].firstChild.style.width = "0";
+    }
+    var g = steps[S.idx].p ? "rounds" : steps[S.idx].kind;
+    Array.prototype.forEach.call($("tlGroups").children, function (el) { el.classList.toggle("cur", el.dataset.g === g && S.status !== "done"); });
+  }
+
+  function render(force) {
+    var now = Date.now(), d = new Date(now);
+    $("clock").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    var sig = S.idx + "|" + S.status + "|" + steps.length;
+    if (force || sig !== structSig) { structSig = sig; renderStructure(); }
+
+    var rem = remaining(now), D = dur(S.idx);
+    var tb = $("timerbox"), app = $("app");
+    $("timer").textContent = S.status === "done" ? "00:00" : mmss(rem);
+    var warn = S.status !== "done" && S.status !== "idle" && rem <= 60000 && rem > 10000;
+    var crit = S.status !== "done" && S.status !== "idle" && rem <= 10000;
+    tb.classList.toggle("warn", warn); tb.classList.toggle("crit", crit);
+    tb.classList.toggle("blink", crit && S.status === "running");
+    app.classList.toggle("is-warn", warn); app.classList.toggle("is-crit", crit);
+    var frac = S.status === "done" ? 1 : Math.min(1, Math.max(0, (D - rem) / D));
+    $("stepFill").style.width = (frac * 100) + "%";
+
+    // timeline
+    var tot = total(), span = Math.max(SLOT_MIN * 60000, tot), st = startMs();
+    var elapsed = S.status === "done" ? tot : before(S.idx) + (D - rem);
+    $("tlPos").style.left = (elapsed / span * 100) + "%";
+    var cur = $("tlSegs").children[S.idx];
+    if (cur && S.status !== "done") cur.firstChild.style.width = (frac * 100) + "%";
+    var nowDay = msOfDay(d), rel = nowDay - st;
+    var nowEl = $("tlNow");
+    nowEl.hidden = !(rel >= 0 && rel <= span);
+    if (!nowEl.hidden) nowEl.style.left = (rel / span * 100) + "%";
+
+    $("tlElapsed").innerHTML = "Elapsed <strong>" + mmss(elapsed) + "</strong> of " + mmss(tot) + " · Remaining <strong>" + mmss(tot - elapsed) + "</strong>";
+    var slotEnd = st + SLOT_MIN * 60000, txt;
+    if (S.status === "idle") txt = "Planned " + hhmm(st) + "–" + hhmm(st + tot);
+    else if (S.status === "done") txt = "Session finished";
+    else {
+      var proj = nowDay + (tot - elapsed);
+      txt = "Projected finish <strong>" + hhmm(proj) + "</strong>";
+      if (rel > -30 * 60000 && rel < span + 60 * 60000) {
+        var diff = Math.round((proj - slotEnd) / 60000);
+        txt += diff > 0 ? " · " + diff + " min over" : diff < 0 ? " · " + (-diff) + " min early" : " · On time";
+      }
+    }
+    $("tlSched").innerHTML = txt;
+    var over = Math.round((tot - SLOT_MIN * 60000) / 6000) / 10;
+    var w = $("tlWarn");
+    w.hidden = over <= 0;
+    if (over > 0) w.textContent = "Plan runs " + over + " min over 60 min";
+    if (force) renderSummary();
+  }
+
+  function renderSummary() {
+    var tot = total(), st = startMs(), over = tot - SLOT_MIN * 60000;
+    var per = cfg.intro + cfg.video + cfg.qa;
+    var adjCount = Object.keys(S.adj).filter(function (k) { return S.adj[k]; }).length;
+    var box = $("sumBox");
+    box.classList.toggle("over", over > 0);
+    var html = "<strong>Total: " + minsLabel(tot) + "</strong> · " + hhmm(st) + " → " + hhmm(st + tot) + "<br>" +
+      "Demo Rounds: " + cfg.groupSize + " × " + per + " min = " + minsLabel(before(steps.length - 2)) + " · Vote " + cfg.vote + " · Wrap-Up " + cfg.wrap;
+    if (adjCount) html += "<br><span class=\"small\">Includes live +/− time changes on " + adjCount + " stage(s). Reset clears them.</span>";
+    if (over > 0) html += '<br><span class="w">Over by ' + minsLabel(over) + ". The session would end at " + hhmm(st + tot) + ", after the 60-minute slot (" + hhmm(st + SLOT_MIN * 60000) + "). Shorten a stage or reduce the group size.</span>";
+    else if (over < 0) html += "<br>" + minsLabel(-over) + " to spare in the 60-minute slot.";
+    box.innerHTML = html;
+  }
+
+  /* ---------- Settings ---------- */
+  function fillForm() {
+    $("fHost").value = cfg.host; $("fGroup").value = cfg.groupSize; $("fStart").value = cfg.start;
+    $("fIntro").value = cfg.intro; $("fVideo").value = cfg.video; $("fQa").value = cfg.qa;
+    $("fVote").value = cfg.vote; $("fWrap").value = cfg.wrap; $("fLook").value = cfg.look;
+    $("tIntro").value = cfg.text.intro; $("tVideo").value = cfg.text.video; $("tQa").value = cfg.text.qa;
+    $("tVote").value = cfg.text.vote; $("tWrap").value = cfg.text.wrap;
+  }
+  function num(id, min, max, fb) { var v = parseFloat($(id).value); if (!isFinite(v)) return fb; return Math.min(max, Math.max(min, Math.round(v * 2) / 2)); }
+  function applySettings() {
+    var now = Date.now(), oldKey = steps[S.idx].key, oldElapsed = dur(S.idx) - remaining(now);
+    cfg.host = $("fHost").value;
+    cfg.groupSize = Math.round(num("fGroup", 1, 15, cfg.groupSize));
+    if (/^\d{1,2}:\d{2}/.test($("fStart").value)) cfg.start = $("fStart").value.slice(0, 5);
+    cfg.intro = num("fIntro", 0.5, 30, cfg.intro); cfg.video = num("fVideo", 0.5, 30, cfg.video); cfg.qa = num("fQa", 0.5, 30, cfg.qa);
+    cfg.vote = num("fVote", 0.5, 30, cfg.vote); cfg.wrap = num("fWrap", 0.5, 30, cfg.wrap);
+    cfg.look = $("fLook").value === "light" ? "light" : "dark";
+    ["intro", "video", "qa", "vote", "wrap"].forEach(function (k) { cfg.text[k] = $("t" + k.charAt(0).toUpperCase() + k.slice(1)).value; });
+    applyLook();
+    build();
+    var ni = -1, same = false;
+    for (var i = 0; i < steps.length; i++) if (steps[i].key === oldKey) { ni = i; same = true; break; }
+    if (ni < 0) ni = Math.min(S.idx, steps.length - 1);
+    S.idx = ni;
+    if (S.status === "idle") S.remaining = dur(ni);
+    else if (S.status !== "done") {
+      var r = Math.max(1000, dur(ni) - (same ? oldElapsed : 0));
+      if (S.status === "running") S.endAt = now + r; else S.remaining = r;
+    }
+    save(); buildTimeline(); render(true);
+  }
+  function applyLook() { document.documentElement.setAttribute("data-look", cfg.look); }
+  function openSettings(open) {
+    var d = $("drawer");
+    d.hidden = open === undefined ? !d.hidden : !open;
+    if (!d.hidden) { fillForm(); renderSummary(); $("fHost").focus(); }
+  }
+
+  /* ---------- Fullscreen & controls visibility ---------- */
+  function toggleFull() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+      else document.documentElement.requestFullscreen().catch(function () {});
+    } catch (e) {}
+  }
+  document.addEventListener("fullscreenchange", function () {
+    $("bFull").innerHTML = (document.fullscreenElement ? "Exit Full Screen" : "Full Screen") + " <kbd>F</kbd>";
+  });
+  function toggleControls() {
+    var app = $("app"), hide = !app.classList.contains("noctl");
+    app.classList.toggle("noctl", hide); $("bShow").hidden = !hide;
+  }
+
+  /* ---------- Wire up ---------- */
+  $("bSound").addEventListener("click", function () { if (ensureAudio()) { shortBeep(); setTimeout(longTone, 350); } });
+  $("bTest").addEventListener("click", function () { ensureAudio(); shortBeep(); setTimeout(shortBeep, 400); setTimeout(longTone, 800); });
+  $("bMute").addEventListener("click", toggleMute);
+  $("bStart").addEventListener("click", startPause);
+  $("bPrev").addEventListener("click", function () { goTo(S.status === "done" ? steps.length - 1 : S.idx - 1); });
+  $("bNext").addEventListener("click", function () { if (S.status !== "done") goTo(S.idx + 1); });
+  $("bPlus").addEventListener("click", function () { adjust(60000); });
+  $("bMinus").addEventListener("click", function () { adjust(-60000); });
+  $("bReset").addEventListener("click", reset);
+  $("bFull").addEventListener("click", toggleFull);
+  $("bSettings").addEventListener("click", function () { openSettings(); });
+  $("bClose").addEventListener("click", function () { openSettings(false); });
+  $("bHide").addEventListener("click", toggleControls);
+  $("bShow").addEventListener("click", toggleControls);
+  $("bDefaults").addEventListener("click", function () {
+    var b = this;
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Click again to restore defaults"; setTimeout(function () { delete b.dataset.armed; b.textContent = "Restore Default Settings"; }, 3000); return; }
+    delete b.dataset.armed; b.textContent = "Restore Default Settings";
+    var host = cfg.host; cfg = clone(DEF); cfg.host = host; fillForm(); applySettings();
+  });
+  $("drawer").addEventListener("input", applySettings);
+  $("drawer").addEventListener("change", applySettings);
+
+  document.addEventListener("keydown", function (e) {
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") { if (e.key === "Escape") openSettings(false); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+    if (k === " " || k === "Spacebar") { e.preventDefault(); startPause(); }
+    else if (k === "ArrowRight") { e.preventDefault(); if (S.status !== "done") goTo(S.idx + 1); }
+    else if (k === "ArrowLeft") { e.preventDefault(); goTo(S.status === "done" ? steps.length - 1 : S.idx - 1); }
+    else if (k === "+" || k === "=" || k === "Add") { e.preventDefault(); adjust(60000); }
+    else if (k === "-" || k === "_" || k === "Subtract" || k === "−") { e.preventDefault(); adjust(-60000); }
+    else if (k === "m" || k === "M") toggleMute();
+    else if (k === "f" || k === "F") toggleFull();
+    else if (k === "h" || k === "H") toggleControls();
+    else if (k === "s" || k === "S") openSettings();
+    else if (k === "Escape") openSettings(false);
+  });
+
+  /* ---------- Boot ---------- */
+  applyLook();
+  build();
+  var st = loaded.st;
+  if (st && st.status) {
+    S.adj = st.adj || {};
+    var ix = 0;
+    for (var i = 0; i < steps.length; i++) if (steps[i].key === st.key) { ix = i; break; }
+    S.idx = ix; S.status = st.status; S.endAt = st.endAt || 0;
+    S.remaining = typeof st.remaining === "number" ? st.remaining : dur(ix);
+    if (S.status === "idle") S.remaining = dur(ix);
+  } else {
+    S.remaining = dur(0);
+  }
+  renderSound();
+  buildTimeline();
+  render(true);
+  setInterval(tick, 100);
+})();
+</script>
+</body>
+</html>
